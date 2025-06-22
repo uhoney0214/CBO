@@ -34,7 +34,6 @@ def cei_acquisition(x_orig, gp_f, y_best_max, gp_B, scaler_X, B_sat=1.6, xi=1.0)
     ei = np.where(imp > 0, ei, 0.0)
     pf = norm.cdf((B_sat - mu_B) / (sigma_B + 1e-12))
     return float((ei * pf)[0])
-
 # 3. 다음 탐색 지점 함수 정의
 def propose_location(
     gp_f, gp_B, y_best_max, bounds, scaler_X, X, y_force, y_B, tol=1e-6, perturb_ratio=0.03
@@ -127,13 +126,13 @@ else:
     y_best_max = y_force.max()
 bounds_list = [(5,75), (10,40), (11,25), (10,50), (0.2,3), (100,600), (2,10)]
 x_next, cei_val = propose_location(gp_force, gp_B, y_best_max, bounds_list, scaler_X, X, y_force, y_B)
-# 4-2.탐색 지점에서의 예측 force, B값
+# 4)탐색 지점에서의 예측 force, B값
 mu_f, _ = gp_force.predict(scaler_X.transform([x_next]), return_std=True)
 mu_B, _ = gp_B.predict(scaler_X.transform([x_next]), return_std=True)
 mu_f, mu_B = float(mu_f[0]), float(mu_B[0])
-# 4) best_so_far(force, B<B_sat만)로 갱신
+# 5) best_so_far(force, B<B_sat만)로 갱신
 best_so_far = get_best_so_far(history_path, mu_f, mu_B)
-# 5) comsol_ready.txt에 추천점 저장
+# 6) comsol_ready.txt에 추천점 저장
 cols = features
 units = {c: "mm" for c in cols}
 units["N"] = ""
@@ -142,7 +141,7 @@ with open("comsol_ready.txt", "w") as f:
     for col, v in zip(cols, x_next):
         f.write(f'{col} "{v:.10f}" [{units[col]}]\n')
 print("✅ comsol_ready.txt 파일 생성 완료.")
-# 6) 기록
+# 7) 기록
 row = f"{iteration} {best_so_far} {cei_val}\n"
 with open(history_path, "a", encoding="utf-8") as f:
     f.write(row)
