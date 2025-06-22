@@ -6,7 +6,6 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel as C, RBF
 from sklearn.preprocessing import StandardScaler
 import os
-
 # 1. 데이터 전처리 - 변수 scaling 및 GP학습
 df = pd.read_csv("100sampledata.txt", sep="\s+", engine="python")
 df.columns = [
@@ -18,14 +17,12 @@ features = ["h_coil", "r_plunger", "z_plunger", "h_plunger", "g_air", "N", "I0"]
 X = df[features].values
 y_force = df["force"].values
 y_B     = df["B"].values
-
 scaler_X = StandardScaler()
 X_scaled = scaler_X.fit_transform(X)
 kernel = C(1.0, (1e-3, 1e3)) * RBF(length_scale=np.ones(7), length_scale_bounds=(1e-2, 1e2))
 gp_force = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10, alpha=1e-3, normalize_y=True).fit(X_scaled, y_force)
 gp_B     = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10, alpha=1e-3, normalize_y=True).fit(X_scaled, y_B)
 B_sat=1.6
-
 # 2. 획득함수 정의
 def cei_acquisition(x_orig, gp_f, y_best_max, gp_B, scaler_X, B_sat=1.6, xi=1.0):
     x_scaled = scaler_X.transform(np.atleast_2d(x_orig))
@@ -72,8 +69,7 @@ def propose_location(
             cei_val = -res.fun
             if cei_val > best_cei:
                 best_cei = cei_val
-                best_x = x_cand
-                
+                best_x = x_cand                
     #못 찾으면(best_cei ≤ tol) best force point 근처 3% perturbation
     if best_cei <= tol or best_x is None:
         valid_idx = np.where(y_B < B_sat)[0]
@@ -96,7 +92,6 @@ def propose_location(
         best_x = np.array(perturbed_pt, float)
         best_cei = cei_acquisition(best_x, gp_f, y_best_max, gp_B, scaler_X)
     return best_x, best_cei
-
 # history 파일 세팅
 history_path = "CEI_history.txt"
 header = "iteration best_so_far ECI\n"
@@ -106,7 +101,6 @@ if not os.path.exists(history_path):
 with open(history_path, "r", encoding="utf-8") as f:
     lines = f.readlines()
 iteration = len(lines) if lines and lines[0].startswith("iteration") else len(lines) + 1
-
 # best_so_far 계산
 def get_best_so_far(history_path, force_candidate, B_candidate):
     best = -np.inf
@@ -126,26 +120,19 @@ def get_best_so_far(history_path, force_candidate, B_candidate):
     if B_candidate < B_sat and force_candidate > best:
         best = force_candidate
     return best if best > -np.inf else "None"
-
-# 1) 제약 만족 데이터에서 best force 찾기
 valid_idx = np.where(y_B < B_sat)[0]
 if len(valid_idx) > 0:
     y_best_max = y_force[valid_idx].max()
 else:
     y_best_max = y_force.max()
-
-# 4-1.탐색 지점 설계 변수 벡터의 값, cEI값
 bounds_list = [(5,75), (10,40), (11,25), (10,50), (0.2,3), (100,600), (2,10)]
 x_next, cei_val = propose_location(gp_force, gp_B, y_best_max, bounds_list, scaler_X, X, y_force, y_B)
-
 # 4-2.탐색 지점에서의 예측 force, B값
 mu_f, _ = gp_force.predict(scaler_X.transform([x_next]), return_std=True)
 mu_B, _ = gp_B.predict(scaler_X.transform([x_next]), return_std=True)
 mu_f, mu_B = float(mu_f[0]), float(mu_B[0])
-
 # 4) best_so_far(force, B<B_sat만)로 갱신
 best_so_far = get_best_so_far(history_path, mu_f, mu_B)
-
 # 5) comsol_ready.txt에 추천점 저장
 cols = features
 units = {c: "mm" for c in cols}
@@ -155,18 +142,7 @@ with open("comsol_ready.txt", "w") as f:
     for col, v in zip(cols, x_next):
         f.write(f'{col} "{v:.10f}" [{units[col]}]\n')
 print("✅ comsol_ready.txt 파일 생성 완료.")
-
-# 6) 결과 출력
-print("\n=== Next Design ===")
-print(f"y_best_max (B < {B_sat}): {y_best_max}")
-for n, v in zip(features, x_next):
-    print(f"{n}: {v}")
-print(f"Predicted force: {mu_f}")
-print(f"Predicted B: {mu_B}")
-print(f"CEI value: {cei_val}")
-
-
-# 7) 기록
+# 6) 기록
 row = f"{iteration} {best_so_far} {cei_val}\n"
 with open(history_path, "a", encoding="utf-8") as f:
     f.write(row)
